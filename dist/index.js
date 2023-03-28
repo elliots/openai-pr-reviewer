@@ -3897,7 +3897,7 @@ __nccwpck_require__.r(__webpack_exports__);
 
 
 async function run() {
-    const options = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Options */ .Ei(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('debug'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_review'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('review_comment_lgtm'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('patch_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('path_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('system_message'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model_temperature'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_retries'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_timeout_ms'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_concurrency_limit'));
+    const options = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Options */ .Ei(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('debug'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_review'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('review_comment_lgtm'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('patch_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_patches_per_file'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('path_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('system_message'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model_temperature'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_retries'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_timeout_ms'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_concurrency_limit'));
     const prompts = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Prompts */ .jc(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_file'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_patch_begin'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_patch'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_release_notes'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_file'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment'));
     _actions_core__WEBPACK_IMPORTED_MODULE_0__.info(`options: ${JSON.stringify(options)}`);
     // initialize openai bot
@@ -5588,6 +5588,7 @@ class Options {
     max_files_to_review;
     review_comment_lgtm;
     patch_filters;
+    max_patches_to_review_per_file;
     path_filters;
     system_message;
     openai_model;
@@ -5596,12 +5597,13 @@ class Options {
     openai_timeout_ms;
     openai_concurrency_limit;
     max_tokens_for_extra_content;
-    constructor(debug, max_files_to_summarize = '40', max_files_to_review = '0', review_comment_lgtm = false, patch_filters = [], path_filters = null, system_message = '', openai_model = 'gpt-3.5-turbo', openai_model_temperature = '0.0', openai_retries = '3', openai_timeout_ms = '60000', openai_concurrency_limit = '4') {
+    constructor(debug, max_files_to_summarize = '40', max_files_to_review = '0', review_comment_lgtm = false, patch_filters = [], max_patches_to_review_per_file = '0', path_filters = null, system_message = '', openai_model = 'gpt-3.5-turbo', openai_model_temperature = '0.0', openai_retries = '3', openai_timeout_ms = '60000', openai_concurrency_limit = '4') {
         this.debug = debug;
         this.max_files_to_summarize = parseInt(max_files_to_summarize);
         this.max_files_to_review = parseInt(max_files_to_review);
         this.review_comment_lgtm = review_comment_lgtm;
         this.patch_filters = new PatchFilter(patch_filters);
+        this.max_patches_to_review_per_file = parseInt(max_patches_to_review_per_file);
         this.path_filters = new PathFilter(path_filters);
         this.system_message = system_message;
         this.openai_model = openai_model;
@@ -6063,6 +6065,7 @@ const codeReview = async (bot, options, prompts) => {
             filter_selected_files.push(file);
         }
     }
+    const skipped_patches_in_files = [];
     // find patches to review
     const filtered_files_to_review = await Promise.all(filter_selected_files.map(async (file) => {
         // retrieve file contents
@@ -6095,7 +6098,7 @@ const codeReview = async (bot, options, prompts) => {
             file_diff = file.patch;
         }
         let excludedPatches = 0;
-        const patches = [];
+        let patches = [];
         for (const patch of split_patch(file.patch)) {
             const line = patch_comment_line(patch);
             if (options.patch_filters.check(patch)) {
@@ -6105,8 +6108,16 @@ const codeReview = async (bot, options, prompts) => {
                 excludedPatches++;
             }
         }
+        if (options.max_patches_to_review_per_file > 0 &&
+            patches.length > options.max_patches_to_review_per_file) {
+            core.info(`Too many patches in ${file.filename}, only including first ${options.max_patches_to_review_per_file} patches`);
+            excludedPatches +=
+                patches.length - options.max_patches_to_review_per_file;
+            patches = patches.slice(0, options.max_patches_to_review_per_file);
+        }
         if (excludedPatches > 0) {
             core.info(`Excluded ${excludedPatches}/${excludedPatches + patches.length} patches in ${file.filename}`);
+            skipped_patches_in_files.push([file.filename, excludedPatches]);
         }
         if (patches.length > 0) {
             return [file.filename, file_content, file_diff, patches];
@@ -6362,6 +6373,20 @@ ${skipped_files_to_summarize.length > 0
 * ${skipped_files_to_review.join('\n* ')}
 
 </details>
+
+${skipped_patches_in_files.length > 0
+                    ? `
+<details>
+<summary>Patches not reviewed due to limit or filters (${skipped_patches_in_files}.length)</summary>
+
+### Not reviewed
+
+${skipped_patches_in_files
+                        .map(([filename, excludedPatches]) => `* ${filename} (${excludedPatches} patches skipped)`)
+                        .join('\n')}
+
+</details>`
+                    : ''}
 `
                 : ''}
       `;

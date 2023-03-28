@@ -11,6 +11,7 @@ async function run(): Promise<void> {
     core.getInput('max_files_to_review'),
     core.getBooleanInput('review_comment_lgtm'),
     core.getMultilineInput('patch_filters'),
+    core.getInput('max_patches_to_review_per_file'),
     core.getMultilineInput('path_filters'),
     core.getInput('system_message'),
     core.getInput('openai_model'),

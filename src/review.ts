@@ -77,6 +77,8 @@ export const codeReview = async (
     }
   }
 
+  const skipped_patches_in_files: [string, number][] = []
+
   // find patches to review
   const filtered_files_to_review: (
     | [string, string, string, [number, string][]]
@@ -117,7 +119,7 @@ export const codeReview = async (
       }
 
       let excludedPatches = 0
-      const patches: [number, string][] = []
+      let patches: [number, string][] = []
       for (const patch of split_patch(file.patch)) {
         const line = patch_comment_line(patch)
         if (options.patch_filters.check(patch)) {
@@ -127,12 +129,28 @@ export const codeReview = async (
         }
       }
 
+
+
+      if (
+        options.max_patches_to_review_per_file > 0 &&
+        patches.length > options.max_patches_to_review_per_file
+      ) {
+        core.info(
+          `Too many patches in ${file.filename}, only including first ${options.max_patches_to_review_per_file} patches`
+        )
+        excludedPatches +=
+          patches.length - options.max_patches_to_review_per_file
+
+        patches = patches.slice(0, options.max_patches_to_review_per_file)
+      }
+
       if (excludedPatches > 0) {
         core.info(
           `Excluded ${excludedPatches}/${
             excludedPatches + patches.length
           } patches in ${file.filename}`
         )
+        skipped_patches_in_files.push([file.filename, excludedPatches])
       }
 
       if (patches.length > 0) {
@@ -273,8 +291,8 @@ ${skipped_files_to_summarize.length > 0
 
 </details>
 `
-          : ''
-        }
+    : ''
+}
 `
 
       next_summarize_ids = summarize_final_response_ids
@@ -481,6 +499,25 @@ ${skipped_files_to_summarize.length > 0
 * ${skipped_files_to_review.join('\n* ')}
 
 </details>
+
+${
+  skipped_patches_in_files.length > 0
+    ? `
+<details>
+<summary>Patches not reviewed due to limit or filters (${skipped_patches_in_files}.length)</summary>
+
+### Not reviewed
+
+${skipped_patches_in_files
+  .map(
+    ([filename, excludedPatches]) =>
+      `* ${filename} (${excludedPatches} patches skipped)`
+  )
+  .join('\n')}
+
+</details>`
+    : ''
+}
 `
           : ''
         }

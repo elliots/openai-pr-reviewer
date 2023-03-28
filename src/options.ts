@@ -197,6 +197,7 @@ export class Options {
   max_files_to_review: number
   review_comment_lgtm: boolean
   patch_filters: PatchFilter
+  max_patches_to_review_per_file: number
   path_filters: PathFilter
   system_message: string
   openai_model: string
@@ -212,6 +213,7 @@ export class Options {
     max_files_to_review = '0',
     review_comment_lgtm = false,
     patch_filters: string[] = [],
+    max_patches_to_review_per_file = '0',
     path_filters: string[] | null = null,
     system_message = '',
     openai_model = 'gpt-3.5-turbo',
@@ -225,6 +227,7 @@ export class Options {
     this.max_files_to_review = parseInt(max_files_to_review)
     this.review_comment_lgtm = review_comment_lgtm
     this.patch_filters = new PatchFilter(patch_filters)
+    this.max_patches_to_review_per_file = parseInt(max_patches_to_review_per_file)
     this.path_filters = new PathFilter(path_filters)
     this.system_message = system_message
     this.openai_model = openai_model
