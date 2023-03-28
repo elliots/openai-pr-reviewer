@@ -10,6 +10,7 @@ async function run(): Promise<void> {
     core.getInput('max_files_to_summarize'),
     core.getInput('max_files_to_review'),
     core.getBooleanInput('review_comment_lgtm'),
+    core.getMultilineInput('patch_filters'),
     core.getMultilineInput('path_filters'),
     core.getInput('system_message'),
     core.getInput('openai_model'),
@@ -33,6 +34,8 @@ async function run(): Promise<void> {
     core.getInput('comment_file_diff'),
     core.getInput('comment')
   )
+
+  core.info(`options: ${JSON.stringify(options)}`)
 
   // initialize openai bot
   let bot: Bot | null = null

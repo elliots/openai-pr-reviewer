@@ -196,6 +196,7 @@ export class Options {
   max_files_to_summarize: number
   max_files_to_review: number
   review_comment_lgtm: boolean
+  patch_filters: PatchFilter
   path_filters: PathFilter
   system_message: string
   openai_model: string
@@ -210,6 +211,7 @@ export class Options {
     max_files_to_summarize = '40',
     max_files_to_review = '0',
     review_comment_lgtm = false,
+    patch_filters: string[] = [],
     path_filters: string[] | null = null,
     system_message = '',
     openai_model = 'gpt-3.5-turbo',
@@ -222,6 +224,7 @@ export class Options {
     this.max_files_to_summarize = parseInt(max_files_to_summarize)
     this.max_files_to_review = parseInt(max_files_to_review)
     this.review_comment_lgtm = review_comment_lgtm
+    this.patch_filters = new PatchFilter(patch_filters)
     this.path_filters = new PathFilter(path_filters)
     this.system_message = system_message
     this.openai_model = openai_model
@@ -243,6 +246,24 @@ export class Options {
     const ok = this.path_filters.check(path)
     core.info(`checking path: ${path} => ${ok}`)
     return ok
+  }
+}
+
+export class PatchFilter {
+  private rules: string[]
+
+  constructor(rules: string[]) {
+    this.rules = rules
+  }
+
+  check(patch: string): boolean {
+    for (const rule of this.rules) {
+      if (patch.includes(rule)) {
+        return false
+      }
+    }
+
+    return true
   }
 }
 

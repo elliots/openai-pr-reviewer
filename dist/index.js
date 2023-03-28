@@ -3897,8 +3897,9 @@ __nccwpck_require__.r(__webpack_exports__);
 
 
 async function run() {
-    const options = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Options */ .Ei(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('debug'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_review'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('review_comment_lgtm'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('path_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('system_message'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model_temperature'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_retries'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_timeout_ms'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_concurrency_limit'));
+    const options = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Options */ .Ei(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('debug'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('max_files_to_review'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getBooleanInput('review_comment_lgtm'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('patch_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getMultilineInput('path_filters'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('system_message'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_model_temperature'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_retries'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_timeout_ms'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('openai_concurrency_limit'));
     const prompts = new _options_js__WEBPACK_IMPORTED_MODULE_2__/* .Prompts */ .jc(_actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_file'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_patch_begin'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('review_patch'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('summarize_release_notes'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_beginning'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_file'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment_file_diff'), _actions_core__WEBPACK_IMPORTED_MODULE_0__.getInput('comment'));
+    _actions_core__WEBPACK_IMPORTED_MODULE_0__.info(`options: ${JSON.stringify(options)}`);
     // initialize openai bot
     let bot = null;
     try {
@@ -3956,7 +3957,7 @@ __nccwpck_require__.d(__webpack_exports__, {
   "jc": () => (/* binding */ Prompts)
 });
 
-// UNUSED EXPORTS: PathFilter
+// UNUSED EXPORTS: PatchFilter, PathFilter
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
 var core = __nccwpck_require__(2186);
@@ -5586,6 +5587,7 @@ class Options {
     max_files_to_summarize;
     max_files_to_review;
     review_comment_lgtm;
+    patch_filters;
     path_filters;
     system_message;
     openai_model;
@@ -5594,11 +5596,12 @@ class Options {
     openai_timeout_ms;
     openai_concurrency_limit;
     max_tokens_for_extra_content;
-    constructor(debug, max_files_to_summarize = '40', max_files_to_review = '0', review_comment_lgtm = false, path_filters = null, system_message = '', openai_model = 'gpt-3.5-turbo', openai_model_temperature = '0.0', openai_retries = '3', openai_timeout_ms = '60000', openai_concurrency_limit = '4') {
+    constructor(debug, max_files_to_summarize = '40', max_files_to_review = '0', review_comment_lgtm = false, patch_filters = [], path_filters = null, system_message = '', openai_model = 'gpt-3.5-turbo', openai_model_temperature = '0.0', openai_retries = '3', openai_timeout_ms = '60000', openai_concurrency_limit = '4') {
         this.debug = debug;
         this.max_files_to_summarize = parseInt(max_files_to_summarize);
         this.max_files_to_review = parseInt(max_files_to_review);
         this.review_comment_lgtm = review_comment_lgtm;
+        this.patch_filters = new PatchFilter(patch_filters);
         this.path_filters = new PathFilter(path_filters);
         this.system_message = system_message;
         this.openai_model = openai_model;
@@ -5620,6 +5623,20 @@ class Options {
         const ok = this.path_filters.check(path);
         core.info(`checking path: ${path} => ${ok}`);
         return ok;
+    }
+}
+class PatchFilter {
+    rules;
+    constructor(rules) {
+        this.rules = rules;
+    }
+    check(patch) {
+        for (const rule of this.rules) {
+            if (patch.includes(rule)) {
+                return false;
+            }
+        }
+        return true;
     }
 }
 class PathFilter {
@@ -6077,10 +6094,19 @@ const codeReview = async (bot, options, prompts) => {
             core.info(`diff for ${file.filename}: ${file.patch}`);
             file_diff = file.patch;
         }
+        let excludedPatches = 0;
         const patches = [];
         for (const patch of split_patch(file.patch)) {
             const line = patch_comment_line(patch);
-            patches.push([line, patch]);
+            if (options.patch_filters.check(patch)) {
+                patches.push([line, patch]);
+            }
+            else {
+                excludedPatches++;
+            }
+        }
+        if (excludedPatches > 0) {
+            core.info(`Excluded ${excludedPatches}/${excludedPatches + patches.length} patches in ${file.filename}`);
         }
         if (patches.length > 0) {
             return [file.filename, file_content, file_diff, patches];

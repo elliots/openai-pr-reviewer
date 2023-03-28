@@ -22,6 +22,10 @@ inputs:
     required: false
     description: 'Leave comments even if the patch is LGTM'
     default: 'false'
+  patch_filters:
+    required: false
+    description: | 
+      Any patches containing these strings will not be sent to OpenAI. Each line will be considered as one pattern.
   path_filters:
     required: false
     description: |

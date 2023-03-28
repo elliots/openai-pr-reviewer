@@ -116,11 +116,25 @@ export const codeReview = async (
         file_diff = file.patch
       }
 
+      let excludedPatches = 0
       const patches: [number, string][] = []
       for (const patch of split_patch(file.patch)) {
         const line = patch_comment_line(patch)
-        patches.push([line, patch])
+        if (options.patch_filters.check(patch)) {
+          patches.push([line, patch])
+        } else {
+          excludedPatches++
+        }
       }
+
+      if (excludedPatches > 0) {
+        core.info(
+          `Excluded ${excludedPatches}/${
+            excludedPatches + patches.length
+          } patches in ${file.filename}`
+        )
+      }
+
       if (patches.length > 0) {
         return [file.filename, file_content, file_diff, patches] as [
           string,
